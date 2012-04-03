@@ -1,5 +1,5 @@
 require 'dm-rails'
-require 'rails_admin/adapters/datamapper/abstract_object'
+require 'rails_admin/adapters/data_mapper/abstract_object'
 
 module RailsAdmin
   module Adapters

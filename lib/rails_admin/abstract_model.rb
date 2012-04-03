@@ -54,8 +54,8 @@ module RailsAdmin
         extend Adapters::Mongoid
       elsif m.ancestors.map(&:to_s).include?('DataMapper::Resource')
         # DataMapper
-        @adapter = :datamapper
-        require 'rails_admin/adapters/datamapper'
+        @adapter = :data_mapper
+        require 'rails_admin/adapters/data_mapper'
         extend Adapters::DataMapper
       end
     end
