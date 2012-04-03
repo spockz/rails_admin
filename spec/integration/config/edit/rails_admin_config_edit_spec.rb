@@ -29,8 +29,12 @@ describe "RailsAdmin Config DSL Edit Section" do
       end
 
       visit new_path(:model_name => "field_test")
-      find_field('field_test[string_field]').value.should == 'string_field default_value'
-      find_field('field_test[text_field]').value.should == 'string_field text_field'
+      # In Rails 3.2.3 behavior of textarea has changed to insert newline after the opening tag,
+      # but Capybara's RackTest driver is not up to this behavior change.
+      # (https://github.com/jnicklas/capybara/issues/677)
+      # So we manually cut off first newline character as a workaround here.
+      find_field('field_test[string_field]').value.gsub(/^\n/, '').should == 'string_field default_value'
+      find_field('field_test[text_field]').value.gsub(/^\n/, '').should == 'string_field text_field'
       find_field('field_test[date_field]').value.should == Date.today.to_s
       has_checked_field?('field_test[boolean_field]').should be_true
     end
@@ -814,19 +818,19 @@ describe "RailsAdmin Config DSL Edit Section" do
 
     it 'should be desactivable' do
       visit new_path(:model_name => "field_test")
-      should have_selector('.add_nested_fields')
+      should have_selector('#field_test_nested_field_tests_attributes_field .add_nested_fields')
       RailsAdmin.config(FieldTest) do
         configure :nested_field_tests do
           nested_form false
         end
       end
       visit new_path(:model_name => "field_test")
-      should have_no_selector('.add_nested_fields')
+      should have_no_selector('#field_test_nested_field_tests_attributes_field .add_nested_fields')
     end
 
     describe "with nested_attributes_options given" do
       before do
-        FieldTest.nested_attributes_options.stub(:[]).with(:comment).
+        FieldTest.nested_attributes_options.stub(:[]).with(any_args()).
           and_return({:allow_destroy=>true, :update_only=>false})
       end
 
@@ -835,7 +839,7 @@ describe "RailsAdmin Config DSL Edit Section" do
           and_return({:allow_destroy=>true, :update_only=>true})
         visit new_path(:model_name => "field_test")
         should have_selector('.toggler')
-        should_not have_selector('.add_nested_fields')
+        should_not have_selector('#field_test_nested_field_tests_attributes_field .add_nested_fields')
       end
 
       it 'should not show destroy button except for newly created when :allow_destroy is false' do
@@ -848,6 +852,20 @@ describe "RailsAdmin Config DSL Edit Section" do
         should_not have_selector('form .remove_nested_fields')
         should have_selector('.fields_blueprint .remove_nested_fields')
       end
+    end
+  end
+
+  describe 'embedded model', :mongoid => true do
+    it 'should work' do
+      @record = FactoryGirl.create :field_test
+      2.times.each{|i| @record.embeds.create :name => "embed #{i}"}
+      visit edit_path(:model_name => "field_test", :id => @record.id)
+      fill_in "field_test_embeds_attributes_0_name", :with => 'embed 1 edited'
+      page.find('#field_test_embeds_attributes_1__destroy').set('true')
+      click_button "Save"
+      @record.reload
+      @record.embeds.length.should == 1
+      @record.embeds[0].name.should == 'embed 1 edited'
     end
   end
 

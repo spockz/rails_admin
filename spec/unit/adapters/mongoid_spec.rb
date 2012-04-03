@@ -8,15 +8,18 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
 
       class MongoBlog
         include Mongoid::Document
-        references_many :mongo_posts
-        references_many :mongo_comments, :as => :commentable
+        has_many :mongo_posts
+        has_many :mongo_comments, :as => :commentable
+        field :mongo_blog_id
       end
 
       class MongoPost
         include Mongoid::Document
-        referenced_in :mongo_blog
+        belongs_to :mongo_blog
         has_and_belongs_to_many :mongo_categories
-        references_many :mongo_comments, :as => :commentable
+        has_many :mongo_comments, :as => :commentable
+        embeds_one :mongo_note
+        accepts_nested_attributes_for :mongo_note
       end
 
       class MongoCategory
@@ -26,7 +29,9 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
 
       class MongoUser
         include Mongoid::Document
-        references_one :mongo_profile
+        has_one :mongo_profile
+        embeds_many :mongo_notes
+        accepts_nested_attributes_for :mongo_notes
         field :name, :type => String
         field :message, :type => String
         field :short_text, :type => String
@@ -36,20 +41,26 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
 
       class MongoProfile
         include Mongoid::Document
-        referenced_in :mongo_user
+        belongs_to :mongo_user
       end
 
       class MongoComment
         include Mongoid::Document
-        referenced_in :commentable, :polymorphic => true
+        belongs_to :commentable, :polymorphic => true
       end
 
-      @blog = RailsAdmin::AbstractModel.new(MongoBlog)
-      @post = RailsAdmin::AbstractModel.new(MongoPost)
-      @category = RailsAdmin::AbstractModel.new(MongoCategory)
-      @user = RailsAdmin::AbstractModel.new(MongoUser)
-      @profile = RailsAdmin::AbstractModel.new(MongoProfile)
-      @comment = RailsAdmin::AbstractModel.new(MongoComment)
+      class MongoNote
+        include Mongoid::Document
+        embedded_in :mongo_post
+        embedded_in :mongo_user
+      end
+
+      @blog     = RailsAdmin::AbstractModel.new MongoBlog
+      @post     = RailsAdmin::AbstractModel.new MongoPost
+      @category = RailsAdmin::AbstractModel.new MongoCategory
+      @user     = RailsAdmin::AbstractModel.new MongoUser
+      @profile  = RailsAdmin::AbstractModel.new MongoProfile
+      @comment  = RailsAdmin::AbstractModel.new MongoComment
     end
 
     after :all do
@@ -57,21 +68,22 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
     end
 
     it 'lists associations' do
-      @post.associations.map{|a|a[:name].to_s}.sort.should == ['mongo_blog', 'mongo_categories', 'mongo_comments']
+      @post.associations.map{|a| a[:name]}.should =~ [:mongo_blog, :mongo_categories, :mongo_comments, :mongo_note]
     end
 
     it 'reads correct and know types in [:belongs_to, :has_and_belongs_to_many, :has_many, :has_one]' do
-      (@post.associations + @blog.associations + @user.associations).map{|a|a[:type].to_s}.uniq.sort.should == ['belongs_to', 'has_and_belongs_to_many', 'has_many', 'has_one']
+      (@post.associations + @blog.associations + @user.associations).map{|a|a[:type].to_s}.uniq.should =~ ['belongs_to', 'has_and_belongs_to_many', 'has_many', 'has_one']
     end
 
     it "has correct parameter of belongs_to association" do
-      param = @post.associations.select{|a| a[:name] == :mongo_blog}.first
+      param = @post.associations.find{|a| a[:name] == :mongo_blog}
       param.reject{|k, v| [:primary_key_proc, :model_proc].include? k }.should == {
         :name=>:mongo_blog,
         :pretty_name=>"Mongo blog",
         :type=>:belongs_to,
         :foreign_key=>:mongo_blog_id,
         :foreign_type=>nil,
+        :foreign_inverse_of=>nil,
         :as=>nil,
         :polymorphic=>false,
         :inverse_of=>nil,
@@ -83,13 +95,14 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
     end
 
     it "has correct parameter of has_many association" do
-      param = @blog.associations.select{|a| a[:name] == :mongo_posts}.first
+      param = @blog.associations.find{|a| a[:name] == :mongo_posts}
       param.reject{|k, v| [:primary_key_proc, :model_proc].include? k }.should == {
         :name=>:mongo_posts,
         :pretty_name=>"Mongo posts",
         :type=>:has_many,
         :foreign_key=>:mongo_blog_id,
         :foreign_type=>nil,
+        :foreign_inverse_of=>nil,
         :as=>nil,
         :polymorphic=>false,
         :inverse_of=>nil,
@@ -98,16 +111,22 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
       }
       param[:primary_key_proc].call.should == :_id
       param[:model_proc].call.should == MongoPost
+      @post.properties.find{|f| f[:name] == :mongo_blog_id}[:type].should == :bson_object_id
+    end
+
+    it "should not confuse foreign_key column which belongs to associated model" do
+      @blog.properties.find{|f| f[:name] == :mongo_blog_id}[:type].should == :string
     end
 
     it "has correct parameter of has_and_belongs_to_many association" do
-      param = @post.associations.select{|a| a[:name] == :mongo_categories}.first
+      param = @post.associations.find{|a| a[:name] == :mongo_categories}
       param.reject{|k, v| [:primary_key_proc, :model_proc].include? k }.should == {
         :name=>:mongo_categories,
         :pretty_name=>"Mongo categories",
         :type=>:has_and_belongs_to_many,
         :foreign_key=>:mongo_category_ids,
         :foreign_type=>nil,
+        :foreign_inverse_of=>nil,
         :as=>nil,
         :polymorphic=>false,
         :inverse_of=>nil,
@@ -120,13 +139,14 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
 
     it "has correct parameter of polymorphic belongs_to association" do
       RailsAdmin::Config.stub!(:models_pool).and_return(["MongoBlog", "MongoPost", "MongoCategory", "MongoUser", "MongoProfile", "MongoComment"])
-      param = @comment.associations.select{|a| a[:name] == :commentable}.first
+      param = @comment.associations.find{|a| a[:name] == :commentable}
       param.reject{|k, v| [:primary_key_proc, :model_proc].include? k }.should == {
         :name=>:commentable,
         :pretty_name=>"Commentable",
         :type=>:belongs_to,
         :foreign_key=>:commentable_id,
         :foreign_type=>:commentable_type,
+        :foreign_inverse_of=>(Mongoid::VERSION >= '3.0.0' ? :commentable_field : nil),
         :as=>nil,
         :polymorphic=>true,
         :inverse_of=>nil,
@@ -139,13 +159,14 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
 
     it "has correct parameter of polymorphic inverse has_many association" do
       RailsAdmin::Config.stub!(:models_pool).and_return(["MongoBlog", "MongoPost", "MongoCategory", "MongoUser", "MongoProfile", "MongoComment"])
-      param = @blog.associations.select{|a| a[:name] == :mongo_comments}.first
+      param = @blog.associations.find{|a| a[:name] == :mongo_comments}
       param.reject{|k, v| [:primary_key_proc, :model_proc].include? k }.should == {
         :name=>:mongo_comments,
         :pretty_name=>"Mongo comments",
         :type=>:has_many,
         :foreign_key=>:commentable_id,
         :foreign_type=>nil,
+        :foreign_inverse_of=>nil,
         :as=>:commentable,
         :polymorphic=>false,
         :inverse_of=>nil,
@@ -155,6 +176,69 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
       param[:primary_key_proc].call.should == :_id
       param[:model_proc].call.should == MongoComment
     end
+
+    it "has correct parameter of embeds_one association" do
+      param = @post.associations.find{|a| a[:name] == :mongo_note}
+      param.reject{|k, v| [:primary_key_proc, :model_proc].include? k }.should == {
+        :name=>:mongo_note,
+        :pretty_name=>"Mongo note",
+        :type=>:has_one,
+        :foreign_key=>nil,
+        :foreign_type=>nil,
+        :foreign_inverse_of=>nil,
+        :as=>nil,
+        :polymorphic=>false,
+        :inverse_of=>nil,
+        :read_only=>nil,
+        :nested_form=>{:allow_destroy=>false, :update_only=>false}
+      }
+      param[:primary_key_proc].call.should == :_id
+      param[:model_proc].call.should == MongoNote
+    end
+
+    it "has correct parameter of embeds_many association" do
+      param = @user.associations.find{|a| a[:name] == :mongo_notes}
+      param.reject{|k, v| [:primary_key_proc, :model_proc].include? k }.should == {
+        :name=>:mongo_notes,
+        :pretty_name=>"Mongo notes",
+        :type=>:has_many,
+        :foreign_key=>nil,
+        :foreign_type=>nil,
+        :foreign_inverse_of=>nil,
+        :as=>nil,
+        :polymorphic=>false,
+        :inverse_of=>nil,
+        :read_only=>nil,
+        :nested_form=>{:allow_destroy=>false, :update_only=>false}
+      }
+      param[:primary_key_proc].call.should == :_id
+      param[:model_proc].call.should == MongoNote
+    end
+
+    it "should raise error when embeds_* is used without accepts_nested_attributes_for" do
+      class MongoEmbedsOne
+        include Mongoid::Document
+        embeds_one :mongo_embedded
+      end
+
+      class MongoEmbedsMany
+        include Mongoid::Document
+        embeds_many :mongo_embeddeds
+      end
+
+      class MongoEmbedded
+        include Mongoid::Document
+        embedded_in :mongo_embeds_one
+        embedded_in :mongo_embeds_many
+      end
+
+      lambda{ RailsAdmin::AbstractModel.new(MongoEmbedsOne).associations }.should raise_error(RuntimeError,
+        "Embbeded association without accept_nested_attributes_for can't be handled by RailsAdmin,\nbecause embedded model doesn't have top-level access.\nPlease add `accept_nested_attributes_for :mongo_embedded' line to `MongoEmbedsOne' model.\n"
+      )
+      lambda{ RailsAdmin::AbstractModel.new(MongoEmbedsMany).associations }.should raise_error(RuntimeError,
+        "Embbeded association without accept_nested_attributes_for can't be handled by RailsAdmin,\nbecause embedded model doesn't have top-level access.\nPlease add `accept_nested_attributes_for :mongo_embeddeds' line to `MongoEmbedsMany' model.\n"
+      )
+     end
   end
 
   describe "#properties" do
@@ -164,9 +248,10 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
 
     it "maps Mongoid column types to RA types" do
       @abstract_model.properties.select{|p| %w(_id _type array_field big_decimal_field
-        boolean_field bson_object_id_field date_field datetime_field float_field
-        hash_field integer_field name object_field short_text subject text_field time_field title).
-        include? p[:name].to_s}.sort{|a,b| a[:name].to_s <=> b[:name].to_s }.should == [
+        boolean_field bson_object_id_field date_field datetime_field default_field float_field
+        hash_field integer_field name object_field range_field short_text string_field subject
+        symbol_field text_field time_field title).
+        include? p[:name].to_s}.should =~ [
         { :name => :_id,
           :pretty_name => "Id",
           :nullable? => true,
@@ -178,7 +263,7 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
           :nullable? => true,
           :serial? => false,
           :type => :mongoid_type,
-          :length => 1024 },
+          :length => nil },
         { :name => :array_field,
           :pretty_name => "Array field",
           :nullable? => true,
@@ -215,6 +300,12 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
           :serial? => false,
           :type => :datetime,
           :length => nil },
+        { :name => :default_field,
+          :pretty_name => "Default field",
+          :nullable? => true,
+          :serial? => false,
+          :type => :string,
+          :length => 255 },
         { :name => :float_field,
           :pretty_name => "Float field",
           :nullable? => true,
@@ -243,16 +334,28 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
           :pretty_name => "Object field",
           :nullable? => true,
           :serial? => false,
-          :type => :bson_object_id,
-          :length => nil },
+          :type => :string,
+          :length => 255 },
         { :name => :short_text,
           :pretty_name => "Short text",
           :nullable? => true,
           :serial? => false,
           :type => :string,
           :length => 255 },
+        { :name => :string_field,
+          :pretty_name => "String field",
+          :nullable? => true,
+          :serial? => false,
+          :type => :text,
+          :length => nil },
         { :name => :subject,
           :pretty_name => "Subject",
+          :nullable? => true,
+          :serial? => false,
+          :type => :string,
+          :length => 255 },
+        { :name => :symbol_field,
+          :pretty_name => "Symbol field",
           :nullable? => true,
           :serial? => false,
           :type => :string,
@@ -312,7 +415,7 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
 
     describe "#all" do
       it "works without options" do
-        @abstract_model.all.sort.should == @players.sort
+        @abstract_model.all.to_a.should =~ @players
       end
 
       it "supports eager loading" do
@@ -324,8 +427,7 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
       end
 
       it "supports retrieval by bulk_ids" do
-        @abstract_model.all(:bulk_ids => @players[0..1].map{|player| player.id.to_s }).
-          sort.should == @players[0..1].sort
+        @abstract_model.all(:bulk_ids => @players[0..1].map{|player| player.id.to_s }).to_a.should =~ @players[0..1]
       end
 
       it "supports pagination" do
@@ -434,7 +536,7 @@ describe 'RailsAdmin::Adapters::Mongoid', :mongoid => true do
     end
 
     it "makes conrrect query" do
-      @abstract_model.all(:query => "foo").sort.should == @players[1..2]
+      @abstract_model.all(:query => "foo").to_a.should =~ @players[1..2]
     end
   end
 
