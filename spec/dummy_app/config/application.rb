@@ -6,7 +6,11 @@ require "active_resource/railtie"
 require "sprockets/railtie"
 
 begin
-  require "#{CI_ORM}/railtie"
+  if CI_ORM == :data_mapper
+    require "dm-rails/railtie"
+  else
+    require "#{CI_ORM}/railtie"
+  end
 rescue LoadError
 end
 
@@ -29,6 +33,10 @@ module DummyApp
     # config.autoload_paths += %W(#{config.root}/extras)
     config.eager_load_paths.reject!{ |p| p =~ /\/app\/(\w+)$/ && !%w(controllers helpers views).push(CI_ORM).include?($1) }
     config.autoload_paths += %W(#{config.root}/app/#{CI_ORM})
+
+    # Let's be good citizens, and inform Rails of where our models actually live
+    # This ensures dm-rails is capable of correctly auto-loading DataMapper models
+    config.paths['app/models'] = %W(app/#{CI_ORM})
 
     # Only load the plugins named here, in the order given (default is alphabetical).
     # :all can be used as a placeholder for all plugins not explicitly named.
