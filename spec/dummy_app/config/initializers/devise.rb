@@ -14,11 +14,34 @@ Devise.setup do |config|
   # Configure the class responsible to send e-mails.
   # config.mailer = "Devise::Mailer"
 
+  # ==> Validations Library
+  # dm-devise adds some compatibility methods for either dm-validations or
+  # Active Model validations. By default, it determines what to load based on
+  # which library is found (giving preference to dm-validations). You may
+  # explicitly set this to 'dm-validations' or 'active_model', or false to not
+  # load any of the validations compatibility code.
+  # config.data_mapper_validation_lib = nil
+
   # ==> ORM configuration
   # Load and configure the ORM. Supports :active_record (default) and
   # :mongoid (bson_ext recommended) by default. Other ORMs may be
   # available as additional gems.
   require "devise/orm/#{CI_ORM}"
+  
+  # ==> Apply Schema
+  # Tells if dm-devise should apply the devise database schema via property
+  # declarations. You may want to set this to false if working with a legacy
+  # schema.
+  config.apply_schema = true
+
+  # ==> dm-validations Default Error Messages
+  # Messages to use as the default DataMapper validation error messages. The
+  # messages are updated from those included in dm-validations to be consistent
+  # with ActiveModel (i.e. with the Devise test expectations) and include
+  # additional messages that devise uses (:not_found, :already_confirmed,
+  # :not_locked, and :expired). If set to false, the messages are left as
+  # defined by the dm-validations gem. See dm-devise.rb for default.
+  # config.data_mapper_validation_messages = {}
 
   # ==> Configuration for any authentication mechanism
   # Configure which keys are used when authenticating an user. By default is
