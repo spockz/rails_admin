@@ -57,6 +57,8 @@ module RailsAdmin
         @adapter = :data_mapper
         require 'rails_admin/adapters/data_mapper'
         extend Adapters::DataMapper
+        m.send(:include, DataMapper::MassAssignmentSecurity)
+        m.send(:include, ActiveModel::Validations)
       end
     end
 
