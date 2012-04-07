@@ -49,6 +49,18 @@ group :mongoid do
   gem 'dragonfly'
 end
 
+group :data_mapper do
+  gem 'dm-active_model'
+  gem 'dm-aggregates'
+  gem 'dm-timestamps'
+  gem 'dm-serializer'
+
+  gem 'dm-do-adapter'
+  gem 'dm-sqlite-adapter'
+
+  gem 'dm-devise'
+end
+
 gem 'devise', '~> 2.0'
 gem 'rails_admin', :path => '../../'
 gem 'mlb', '~> 0.5'
