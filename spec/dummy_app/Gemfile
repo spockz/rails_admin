@@ -58,7 +58,7 @@ group :data_mapper do
   gem 'dm-do-adapter'
   gem 'dm-sqlite-adapter'
 
-  gem 'dm-devise'
+  gem 'dm-devise', :git => 'git://github.com/jm81/dm-devise.git'
 end
 
 gem 'devise', '~> 2.0'
