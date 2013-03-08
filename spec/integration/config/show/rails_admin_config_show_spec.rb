@@ -13,16 +13,34 @@ describe "RailsAdmin Config DSL Show Section" do
     visit show_path(:model_name => "team", :id => team.id)
   end
 
+  describe "JSON show view" do
+    before do
+      @player = FactoryGirl.create :player
+       visit uri
+    end
+
+    let(:uri) { show_path(:model_name => 'player', :id => @player.id, :format => :json) }
+    let(:body) { page.body }
+
+    it "creates a JSON uri" do
+      expect(uri).to eq("/admin/player/#{@player.id}.json")
+    end
+
+    it "contains the JSONified object" do
+      expect(body).to include(@player.to_json)
+    end
+  end
+
   describe "compact_show_view" do
 
-    it 'should hide empty fields in show view by default' do
+    it "hides empty fields in show view by default" do
       @player = FactoryGirl.create :player
       visit show_path(:model_name => "league", :id => @player.id)
       should_not have_css(".born_on_field")
     end
 
 
-    it 'should be disactivable' do
+    it "is disactivable" do
       RailsAdmin.config do |c|
         c.compact_show_view = false
       end
@@ -34,14 +52,15 @@ describe "RailsAdmin Config DSL Show Section" do
   end
 
   describe "css hooks" do
-    it "should be present" do
+    it "is present" do
       do_request
-      should have_selector("dt.name_field.string_type")
+
+      should have_selector("dt .name_field.string_type")
     end
   end
 
   describe "field groupings" do
-    it "should be hideable" do
+    it "is hideable" do
       RailsAdmin.config Team do
         show do
           group :default do
@@ -62,7 +81,7 @@ describe "RailsAdmin Config DSL Show Section" do
       end
     end
 
-    it "should hide association groupings by the name of the association" do
+    it "hides association groupings by the name of the association" do
       RailsAdmin.config Team do
         show do
           group :players do
@@ -76,7 +95,7 @@ describe "RailsAdmin Config DSL Show Section" do
       should_not have_selector("h4", :text => "Players")
     end
 
-    it "should be renameable" do
+    it "is renameable" do
       RailsAdmin.config Team do
         show do
           group :default do
@@ -90,7 +109,7 @@ describe "RailsAdmin Config DSL Show Section" do
       should have_selector("h4", :text => "Renamed group")
     end
 
-    it "should have accessor for its fields" do
+    it "has accessor for its fields" do
       RailsAdmin.config Team do
         show do
           group :default do
@@ -114,7 +133,7 @@ describe "RailsAdmin Config DSL Show Section" do
       should have_selector(".division_field")
     end
 
-    it "should have accessor for its fields by type" do
+    it "has accessor for its fields by type" do
       RailsAdmin.config Team do
         show do
           group :default do
@@ -144,7 +163,7 @@ describe "RailsAdmin Config DSL Show Section" do
 
   describe "items' fields" do
 
-    it "should show all by default" do
+    it "shows all by default" do
       do_request
 
       %w[division name logo_url manager
@@ -155,7 +174,7 @@ describe "RailsAdmin Config DSL Show Section" do
       end
     end
 
-    it "should only show the defined fields and appear in order defined" do
+    it "only shows the defined fields and appear in order defined" do
       RailsAdmin.config Team do
         show do
           field :manager
@@ -172,7 +191,7 @@ describe "RailsAdmin Config DSL Show Section" do
     end
 
 
-    it "should delegates the label option to the ActiveModel API" do
+    it "delegates the label option to the ActiveModel API" do
       RailsAdmin.config Team do
         show do
           field :manager
@@ -186,7 +205,7 @@ describe "RailsAdmin Config DSL Show Section" do
       should have_selector(".label", :text => "Some Fans")
     end
 
-    it "should be renameable" do
+    it "is renameable" do
       RailsAdmin.config Team do
         show do
           field :manager do
@@ -204,7 +223,7 @@ describe "RailsAdmin Config DSL Show Section" do
       should have_selector(".label", :text => "Name")
     end
 
-    it "should be renameable by type" do
+    it "is renameable by type" do
       RailsAdmin.config Team do
         show do
           fields_of_type :string do
@@ -223,8 +242,8 @@ describe "RailsAdmin Config DSL Show Section" do
       end
     end
 
-    it "should be globally renameable by type" do
-      RailsAdmin::Config.models do
+    it "is globally renameable by type" do
+      RailsAdmin.config Team do
         show do
           fields_of_type :string do
             label { "#{label} (STRING)" }
@@ -242,7 +261,7 @@ describe "RailsAdmin Config DSL Show Section" do
       end
     end
 
-    it "should be hideable" do
+    it "is hideable" do
       RailsAdmin.config Team do
         show do
           field :manager do
@@ -259,7 +278,7 @@ describe "RailsAdmin Config DSL Show Section" do
       should have_selector(".name_field")
     end
 
-    it "should be hideable by type" do
+    it "is hideable by type" do
       RailsAdmin.config Team do
         show do
           fields_of_type :string do
@@ -279,8 +298,8 @@ describe "RailsAdmin Config DSL Show Section" do
       end
     end
 
-    it "should be globally hideable by type" do
-      RailsAdmin::Config.models do
+    it "is globally hideable by type" do
+      RailsAdmin.config Team do
         show do
           fields_of_type :string do
             hide
@@ -300,8 +319,8 @@ describe "RailsAdmin Config DSL Show Section" do
     end
   end
 
-  describe 'embedded model', :mongoid => true do
-    it "should not show link to individual object's page" do
+  describe "embedded model", :mongoid => true do
+    it "does not show link to individual object's page" do
       @record = FactoryGirl.create :field_test
       2.times.each{|i| @record.embeds.create :name => "embed #{i}"}
       visit show_path(:model_name => "field_test", :id => @record.id)

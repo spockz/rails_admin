@@ -40,7 +40,7 @@
         }).toArray();
       }
       var filtering_select = $('<div class="input-append filtering-select" style="float:left"></div>')
-      var input = this.input = $('<input type="search">')
+      var input = this.input = $('<input type="text">')
         .val(value)
         .addClass("ra-filtering-select-input")
         .attr('style', select.attr('style'))
@@ -52,6 +52,7 @@
           select: function(event, ui) {
             var option = $('<option value="' + ui.item.id + '" selected="selected">' + ui.item.value + '</option>');
             select.html(option);
+            select.trigger("change", ui.item.id);
             self._trigger("selected", event, {
               item: option
             });
@@ -79,6 +80,14 @@
             }
           }
         })
+        .keyup(function() {
+          /* Clear select options and trigger change if selected item is deleted */
+          if ($(this).val().length == 0) {
+            select.html($('<option value="" selected="selected"></option>'));
+            select.trigger("change");
+          }
+        })
+
       if(select.attr('placeholder'))
         input.attr('placeholder', select.attr('placeholder'))
 

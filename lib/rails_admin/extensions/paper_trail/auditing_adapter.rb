@@ -8,7 +8,8 @@ module RailsAdmin
         end
 
         def message
-          "#{@version.event} #{@version.item_type} id #{@version.item_id}"
+          @message = @version.event
+          @version.respond_to?(:changeset) ? @message + " [" + @version.changeset.to_a.collect {|c| c[0] + " = " + c[1][1].to_s}.join(", ") + "]" : @message
         end
 
         def created_at
@@ -40,22 +41,22 @@ module RailsAdmin
         def initialize(controller, user_class = User)
           raise "PaperTrail not found" unless defined?(PaperTrail)
           @controller = controller
-          @user_class = user_class
+          @user_class = user_class.to_s.constantize
         end
 
         def latest
-          Version.limit(100).map{|version| VersionProxy.new(version, @user_class)}
+          ::Version.limit(100).map{|version| VersionProxy.new(version, @user_class)}
         end
 
-        def delete_object(message, object, model, user)
+        def delete_object(object, model, user)
           # do nothing
         end
 
-        def update_object(model, object, associations_before, associations_after, modified_associations, old_object, user)
+        def update_object(object, model, user, changes)
           # do nothing
         end
 
-        def create_object(message, object, abstract_model, user)
+        def create_object(object, abstract_model, user)
           # do nothing
         end
 
@@ -66,10 +67,10 @@ module RailsAdmin
             sort = :created_at
             sort_reverse = "true"
           end
-          versions = Version.where :item_type => model.model.name
+          versions = ::Version.where :item_type => model.model.name
           versions = versions.where("event LIKE ?", "%#{query}%") if query.present?
           versions = versions.order(sort_reverse == "true" ? "#{sort} DESC" : sort)
-          versions = all ? versions : versions.page(page.presence || "1").per(per_page)
+          versions = all ? versions : versions.send(Kaminari.config.page_method_name, page.presence || "1").per(per_page)
           versions.map{|version| VersionProxy.new(version, @user_class)}
         end
 
@@ -80,10 +81,10 @@ module RailsAdmin
             sort = :created_at
             sort_reverse = "true"
           end
-          versions = Version.where :item_type => model.model.name, :item_id => object.id
+          versions = ::Version.where :item_type => model.model.name, :item_id => object.id
           versions = versions.where("event LIKE ?", "%#{query}%") if query.present?
           versions = versions.order(sort_reverse == "true" ? "#{sort} DESC" : sort)
-          versions = all ? versions : versions.page(page.presence || "1").per(per_page)
+          versions = all ? versions : versions.send(Kaminari.config.page_method_name, page.presence || "1").per(per_page)
           versions.map{|version| VersionProxy.new(version, @user_class)}
         end
       end

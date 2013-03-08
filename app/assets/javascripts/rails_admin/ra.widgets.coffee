@@ -1,4 +1,4 @@
-$(document).live 'rails_admin.dom_ready', ->
+$(document).on 'rails_admin.dom_ready', ->
 
   if $('form').length # don't waste time otherwise
 
@@ -26,14 +26,35 @@ $(document).live 'rails_admin.dom_ready', ->
     # enumeration
 
     $('form [data-enumeration]').each ->
-      $(this).filteringSelect $(this).data('options')
+      if $(this).is('[multiple]')
+        $(this).filteringMultiselect $(this).data('options')
+      else
+        $(this).filteringSelect $(this).data('options')
 
     # fileupload
 
     $('form [data-fileupload]').each ->
       input = this
-      $(this).find(".delete input[type='checkbox']").live 'click', ->
+      $(this).on 'click', ".delete input[type='checkbox']", ->
         $(input).children('.toggle').toggle('slow')
+
+    # fileupload-preview
+
+    $('form [data-fileupload]').change ->
+      input = this
+      image_container = $("#" + input.id).parent().children(".preview")
+      unless image_container.length
+        image_container = $("#" + input.id).parent().prepend($('<img />').addClass('preview')).find('img.preview')
+        image_container.parent().find('img:not(.preview)').hide()
+      ext = $("#" + input.id).val().split('.').pop().toLowerCase()
+      if input.files and input.files[0] and $.inArray(ext, ['gif','png','jpg','jpeg','bmp']) != -1
+        reader = new FileReader()
+        reader.onload = (e) ->
+          image_container.attr "src", e.target.result
+        reader.readAsDataURL input.files[0]
+        image_container.show()
+      else
+        image_container.hide()
 
     # filtering-multiselect
 
@@ -62,9 +83,12 @@ $(document).live 'rails_admin.dom_ready', ->
       toggler = field.find('> .controls > .btn-group > .toggler')
       # add each nested field to a tab-pane and reference it in the nav
       content.children('.fields:not(.tab-pane)').addClass('tab-pane').each ->
+        $(this).attr('id', 'unique-id-' + (new Date().getTime()) + Math.floor(Math.random()*100000)) # some elements are created on the same ms
         nav.append('<li><a data-toggle="tab" href="#' + this.id + '">' + $(this).children('.object-infos').data('object-label') + '</a></li>')
-      # init first tab, toggler and content/tabs visibility
-      nav.find("> li > a[data-toggle='tab']:first").tab('show')
+      # only if no tab is set to active
+      if nav.find("> li.active").length == 0
+        # init first tab, toggler and content/tabs visibility
+        nav.find("> li > a[data-toggle='tab']:first").tab('show')
       if nav.children().length == 0
         nav.hide()
         content.hide()
@@ -86,7 +110,7 @@ $(document).live 'rails_admin.dom_ready', ->
       nav = field.find("> .controls > .nav")
       content = field.find("> .tab-content")
       toggler = field.find('> .controls > .toggler')
-      content.children(".fields:not(.tab-pane)").addClass('tab-pane').each ->
+      content.children(".fields:not(.tab-pane)").addClass('tab-pane active').each ->
         nav.append('<li><a data-toggle="tab" href="#' + this.id + '">' + $(this).children('.object-infos').data('object-label') + '</a></li>')
       first_tab = nav.find("> li > a[data-toggle='tab']:first")
       first_tab.tab('show')
@@ -124,11 +148,62 @@ $(document).live 'rails_admin.dom_ready', ->
 
     # ckeditor
 
-    $('form [data-richtext=ckeditor]').each ->
-      window.CKEDITOR_BASEPATH = '/assets/ckeditor/'
-      options = $(this).data('options')
+    goCkeditors = ->
+      $('form [data-richtext=ckeditor]').not('.ckeditored').each (index, domEle) ->
+        try
+          if instance = window.CKEDITOR.instances[this.id]
+            instance.destroy(true)
+        window.CKEDITOR.replace(this, $(this).data('options'))
+        $(this).addClass('ckeditored')
+
+    $editors = $('form [data-richtext=ckeditor]').not('.ckeditored')
+    if $editors.length
       if not window.CKEDITOR
-        $(window.document).append('<script src="' + options['jspath'] + '"><\/script>')
-      if instance = window.CKEDITOR.instances[this.id]
-        instance.destroy(true)
-      window.CKEDITOR.replace(this, options['options'])
+        options = $editors.first().data('options')
+        window.CKEDITOR_BASEPATH = options['base_location']
+        $.getScript options['jspath'], (script, textStatus, jqXHR) =>
+          goCkeditors()
+      else
+        goCkeditors()
+
+    #codemirror
+
+    goCodeMirrors = (array) =>
+      array.each (index, domEle) ->
+        options = $(this).data('options')
+        textarea = this
+        $.getScript options['locations']['mode'], (script, textStatus, jqXHR) ->
+          $('head').append('<link href="' + options['locations']['theme'] + '" rel="stylesheet" media="all" type="text\/css">')
+          CodeMirror.fromTextArea(textarea,{mode:options['options']['mode'],theme:options['options']['theme']})
+          $(textarea).addClass('codemirrored')
+
+    array = $('form [data-richtext=codemirror]').not('.codemirrored')
+    if array.length
+      @array = array
+      if not window.CodeMirror
+        options = $(array[0]).data('options')
+        $('head').append('<link href="' + options['csspath'] + '" rel="stylesheet" media="all" type="text\/css">')
+        $.getScript options['jspath'], (script, textStatus, jqXHR) =>
+          goCodeMirrors(@array)
+      else
+        goCodeMirrors(@array)
+
+    # bootstrap_wysihtml5
+
+    goBootstrapWysihtml5s = (array, config_options) =>
+      array.each ->
+        $(@).addClass('bootstrap-wysihtml5ed')
+        $(@).closest('.controls').addClass('well')
+        $(@).wysihtml5(config_options)
+
+    array = $('form [data-richtext=bootstrap-wysihtml5]').not('.bootstrap-wysihtml5ed')
+    if array.length
+      @array = array
+      options = $(array[0]).data('options')
+      config_options = $.parseJSON(options['config_options'])
+      if not window.wysihtml5
+        $('head').append('<link href="' + options['csspath'] + '" rel="stylesheet" media="all" type="text\/css">')
+        $.getScript options['jspath'], (script, textStatus, jqXHR) =>
+          goBootstrapWysihtml5s(@array, config_options)
+      else
+        goBootstrapWysihtml5s(@array, config_options)

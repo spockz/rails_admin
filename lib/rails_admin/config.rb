@@ -1,4 +1,4 @@
-require 'rails_admin/config/model'
+require 'rails_admin/config/lazy_model'
 require 'rails_admin/config/sections/list'
 require 'active_support/core_ext/class/attribute_accessors'
 
@@ -63,8 +63,15 @@ module RailsAdmin
       # Stores model configuration objects in a hash identified by model's class
       # name.
       #
-      # @see RailsAdmin::Config.model
+      # @see RailsAdmin.config
       attr_reader :registry
+
+      # accepts a hash of static links to be shown below the main navigation
+      attr_accessor :navigation_static_links
+      attr_accessor :navigation_static_label
+
+      # yell about fields that are not marked as accessible
+      attr_accessor :yell_for_non_accessible_fields
 
       # Setup authentication to be run as a before filter
       # This is run inside the controller instance so you can setup any authentication you need to
@@ -237,9 +244,12 @@ module RailsAdmin
             entity.class.name.to_sym
           end
         end
-        config = @registry[key] ||= RailsAdmin::Config::Model.new(entity)
-        config.instance_eval(&block) if block
-        config
+
+        if block
+          @registry[key] = RailsAdmin::Config::LazyModel.new(entity, &block)
+        else
+          @registry[key] ||= RailsAdmin::Config::LazyModel.new(entity)
+        end
       end
 
       def default_hidden_fields=(fields)
@@ -259,12 +269,9 @@ module RailsAdmin
 
       # Returns all model configurations
       #
-      # If a block is given it is evaluated in the context of configuration
-      # instances.
-      #
       # @see RailsAdmin::Config.registry
-      def models(&block)
-        RailsAdmin::AbstractModel.all.map{|m| model(m, &block)}
+      def models
+        RailsAdmin::AbstractModel.all.map{|m| model(m)}
       end
 
       # Reset all configurations to defaults.
@@ -272,6 +279,7 @@ module RailsAdmin
       # @see RailsAdmin::Config.registry
       def reset
         @compact_show_view = true
+        @yell_for_non_accessible_fields = true
         @authenticate = nil
         @authorize = nil
         @audit = nil
@@ -289,6 +297,8 @@ module RailsAdmin
         @label_methods = [:name, :title]
         @main_app_name = Proc.new { [Rails.application.engine_name.titleize.chomp(' Application'), 'Admin'] }
         @registry = {}
+        @navigation_static_links = {}
+        @navigation_static_label = nil
         RailsAdmin::Config::Actions.reset
       end
 

@@ -5,17 +5,18 @@ module RailsAdmin
 
   CSVClass = RUBY_VERSION < '1.9' ? ::FasterCSV : ::CSV
   NON_ASCII_ENCODINGS = /(UTF\-16)|(UTF\-32)|(ISO\-2022\-JP)|(Big5\-HKSCS)|(UTF\-7)/
+  UTF8_ENCODINGS = [nil, '', 'utf8', 'utf-8', 'unicode', 'UTF8', 'UTF-8', 'UNICODE']
 
   class CSVConverter
 
     def initialize(objects = [], schema = {})
       return self if (@objects = objects).blank?
 
-      @model = objects.first.class
+      @model = objects.dup.first.class
       @abstract_model = RailsAdmin::AbstractModel.new(@model)
       @model_config = @abstract_model.config
       @methods = [(schema[:only] || []) + (schema[:methods] || [])].flatten.compact
-      @fields = @model_config.export.fields.select{|f| @methods.include? f.name }
+      @fields = @methods.map {|m| @model_config.export.fields.find {|f| f.name == m} }
       @empty = ::I18n.t('admin.export.empty_value_for_associated_objects')
       @associations = {}
 
@@ -25,7 +26,7 @@ module RailsAdmin
         abstract_model = model_config.abstract_model
         model = abstract_model.model
         methods = [(values[:only] || []) + (values[:methods] || [])].flatten.compact
-        fields = model_config.export.fields.select{|f| methods.include? f.name }
+        fields = methods.map {|m| model_config.export.fields.find {|f| f.name == m} }
 
         @associations[key] = {
           :association => association,
@@ -42,11 +43,7 @@ module RailsAdmin
       return '' if @objects.blank?
 
       # encoding shenanigans first
-      @encoding_from = if [nil, '', 'utf8', 'utf-8', 'UTF8', 'UTF-8'].include?(encoding = @abstract_model.encoding)
-        'UTF-8'
-      else
-        encoding
-      end
+      @encoding_from = UTF8_ENCODINGS.include?(@abstract_model.encoding) ? 'UTF-8' : @abstract_model.encoding
 
       unless options[:encoding_to].blank?
         @encoding_to = options[:encoding_to]
@@ -106,4 +103,3 @@ module RailsAdmin
     end
   end
 end
-
